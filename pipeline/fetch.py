@@ -18,12 +18,13 @@ from pathlib import Path
 
 import requests
 
-LEAGUE_ID = int(os.environ.get("LEAGUE_ID", "23779"))
+LEAGUE_ID = int(os.environ.get("LEAGUE_ID", "5443"))
 DRAFT = "https://draft.premierleague.com/api/"
 CLASSIC = "https://fantasy.premierleague.com/api/"
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "league.json"
 VALUE_HISTORY = ROOT / "data" / "value_history.json"
+DRAFTS_DIR = ROOT / "data" / "drafts"
 
 POS = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
 
@@ -219,19 +220,41 @@ def main() -> None:
         "total": s["total"], "gw": s["event_total"],
     } for s in details.get("standings", [])]
 
-    # --- draft ------------------------------------------------------------------------
-    counted_pts = defaultdict(int)  # (manager, element) -> points that counted for them
-    for p in picks:
-        if p["xi"]:
-            counted_pts[(p["m"], p["el"])] += p["pts"]
+    # --- drafts ------------------------------------------------------------------------
+    # A league can hold several drafts a season (e.g. a January re-draft), but the API only ever
+    # returns the *current* draft's choices. So every draft we see is archived to data/drafts/ and
+    # a draft we never saw is rebuilt from squads at its first gameweek (no round/pick order then).
+    DRAFTS_DIR.mkdir(parents=True, exist_ok=True)
+    live_choices = [c for c in get(DRAFT + f"draft/{LEAGUE_ID}/choices")["choices"] if c.get("element")]
+    if live_choices:
+        did = live_choices[0]["draft"]
+        (DRAFTS_DIR / f"{did}.json").write_text(json.dumps(live_choices, indent=1), encoding="utf-8")
 
-    choices = get(DRAFT + f"draft/{LEAGUE_ID}/choices")["choices"]
-    draft = [{
-        "m": by_entry.get(c["entry"]), "round": c["round"], "pick": c["pick"], "el": c["element"],
-        "for_team": counted_pts[(by_entry.get(c["entry"]), c["element"])],
-        "season": players.get(c["element"], {}).get("pts", 0),
-        "auto": c["was_auto"],
-    } for c in choices if c["element"]]
+    done = sorted((d for d in league.get("drafts", []) if d.get("draft_completed")), key=lambda d: d["event"])
+    draft = []
+    for i, d in enumerate(done):
+        start_gw = d["event"]
+        end_gw = done[i + 1]["event"] if i + 1 < len(done) else 99
+        window = lambda p: start_gw <= p["gw"] < end_gw  # noqa: E731
+        counted = defaultdict(int)
+        for p in picks:
+            if p["xi"] and window(p):
+                counted[(p["m"], p["el"])] += p["pts"]
+        archived = DRAFTS_DIR / f"{d['id']}.json"
+        if archived.exists():
+            rows = [{"m": by_entry.get(c["entry"]), "round": c["round"], "pick": c["pick"], "el": c["element"],
+                     "auto": c["was_auto"]} for c in json.loads(archived.read_text(encoding="utf-8"))]
+        else:
+            rows = [{"m": p["m"], "round": None, "pick": None, "el": p["el"], "auto": False}
+                    for p in picks if p["gw"] == start_gw]
+        for r in rows:
+            r.update(draft=d["id"], gw=start_gw, for_team=counted[(r["m"], r["el"])],
+                     season=players.get(r["el"], {}).get("pts", 0))
+        draft += rows
+    drafts_meta = [{"id": d["id"], "gw": d["event"], "date": d["draft_completed"],
+                    "ordered": (DRAFTS_DIR / f"{d['id']}.json").exists()} for d in done]
+    upcoming = [{"id": d["id"], "gw": d["event"], "date": d["draft_dt"]}
+                for d in league.get("drafts", []) if not d.get("draft_completed")]
 
     # --- transactions (waivers / free agents) & trades ------------------------------
     def pts_from(eid: int, gw: int) -> int:
@@ -301,7 +324,8 @@ def main() -> None:
             "current_gw": current,
             "current_gw_finished": game["current_event_finished"],
             "gws": gws,
-            "draft_date": league.get("draft_dt"),
+            "drafts": drafts_meta,
+            "upcoming_drafts": upcoming,
         },
         "managers": managers,
         "standings": standings,

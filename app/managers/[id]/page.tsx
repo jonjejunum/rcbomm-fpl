@@ -92,14 +92,14 @@ export default async function ManagerPage({ params }: PageProps<"/managers/[id]"
         <Card title="Draft picks" sub="Points scored for this team, compared with the player's season total.">
           <div className="table-scroll">
             <table>
-              <thead><tr><th className="r">Rd</th><th>Player</th><th className="r">For team</th><th className="r">Season</th></tr></thead>
+              <thead><tr><th className="r">{picks[0]?.round ? "Rd" : "Pos"}</th><th>Player</th><th className="r">For team</th><th className="r">Season</th></tr></thead>
               <tbody>
                 {picks.map((d) => {
                   const p = player(d.el);
                   return (
-                    <tr key={d.pick}>
-                      <td className="r muted">{d.round}</td>
-                      <td>{p.name} <span className="muted" style={{ fontSize: 12 }}>{p.pos}</span>{p.owner !== id && <span className="pill" style={{ marginLeft: 6 }}>gone</span>}</td>
+                    <tr key={d.el}>
+                      <td className="r muted">{d.round ?? p.pos}</td>
+                      <td>{p.name} {d.round && <span className="muted" style={{ fontSize: 12 }}>{p.pos}</span>}{p.owner !== id && <span className="pill" style={{ marginLeft: 6 }}>gone</span>}</td>
                       <td className="r"><strong>{d.for_team}</strong></td>
                       <td className="r muted">{d.season}</td>
                     </tr>

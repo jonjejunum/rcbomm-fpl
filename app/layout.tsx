@@ -5,7 +5,7 @@ import { meta } from "@/lib/data";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: `${meta.name} · RCBOMM`, template: `%s · RCBOMM` },
+  title: { default: `${meta.name} · Draft league hub`, template: `%s · ${meta.name}` },
   description: `League table, head-to-heads and stats for the ${meta.name} Premier League Draft league.`,
 };
 

@@ -16,7 +16,10 @@ export interface Player {
   pts: number; form: number; mins: number; xg: number; xa: number;
   status: string; news: string; owner: number | null; gw?: Record<string, number>;
 }
-export interface DraftPick { m: number; round: number; pick: number; el: number; for_team: number; season: number; auto: boolean }
+export interface DraftPick {
+  draft: number; gw: number; m: number; round: number | null; pick: number | null; el: number;
+  for_team: number; season: number; auto: boolean;
+}
 export interface Transaction {
   m: number; gw: number; kind: string; in: number; out: number;
   in_pts: number; out_pts: number; in_counted: number; date: string;
@@ -29,7 +32,9 @@ export interface Trade {
 interface LeagueData {
   meta: {
     league_id: number; name: string; updated: string; current_gw: number;
-    current_gw_finished: boolean; gws: number[]; draft_date: string | null;
+    current_gw_finished: boolean; gws: number[];
+    drafts: { id: number; gw: number; date: string; ordered: boolean }[];
+    upcoming_drafts: { id: number; gw: number; date: string }[];
   };
   managers: Manager[];
   standings: Standing[];
@@ -166,7 +171,15 @@ export function headToHead(a: number, b: number) {
   return { aw, bw, d };
 }
 
-export const draftFor = (id: number) => data.draft.filter((d) => d.m === id).sort((a, b) => a.round - b.round);
+const POS_ORDER: Record<Pos, number> = { GKP: 0, DEF: 1, MID: 2, FWD: 3 };
+/** A manager's picks from the most recent completed draft: round order, or by position when order is unknown. */
+export function draftFor(id: number) {
+  const latest = meta.drafts[meta.drafts.length - 1]?.id;
+  return data.draft
+    .filter((d) => d.m === id && d.draft === latest)
+    .sort((a, b) => (a.round ?? 0) - (b.round ?? 0)
+      || POS_ORDER[player(a.el).pos] - POS_ORDER[player(b.el).pos] || b.for_team - a.for_team);
+}
 export const transactionsFor = (id: number) => data.transactions.filter((t) => t.m === id);
 export const transactions = data.transactions;
 export const trades = data.trades;
