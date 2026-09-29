@@ -23,11 +23,11 @@ head-to-head comparisons, manager pages, draft report cards and a "luck" model b
 flowchart LR
     A[Draft API<br/>draft.premierleague.com] --> P
     B[Classic FPL API<br/>prices] --> P
-    P[pipeline/fetch.py<br/>GitHub Actions, every 3h] -->|commits data/league.json<br/>only when it changes| R[(this repo)]
+    P[pipeline/fetch.py<br/>GitHub Actions, Sun & Mon nights] -->|commits data/league.json<br/>only when it changes| R[(this repo)]
     R -->|push triggers build| V[Next.js on Vercel<br/>fully static pages]
 ```
 
-- **No API calls at page-load time.** A scheduled GitHub Action runs a Python script that pulls the league, every
+- **No API calls at page-load time.** A GitHub Action runs every Sunday (21:00 UTC) and Monday (23:00 UTC). It runs a Python script that pulls the league, every
   gameweek's live stats and every team's picks, then precomputes everything into one ~60 KB JSON file.
   If nothing changed, it commits nothing, so Vercel doesn't redeploy for nothing.
 - **Official scores, verified.** Each team's starting-XI points are rebuilt from player stats and auto-subs, then
